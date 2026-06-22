@@ -1,0 +1,14 @@
+body {
+  background-color: #f8f9fa;
+  overscroll-behavior: none;
+}
+
+/* Prevent text selection on tap */
+.activity-item {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.activity-item:active {
+  background-color: #e9ecef;
+}
