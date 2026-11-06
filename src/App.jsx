@@ -125,7 +125,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-vh-100">
+    <div className="min-vh-100 d-flex flex-column">
       {/* Header */}
       <nav className="navbar navbar-dark bg-primary sticky-top shadow-sm">
         <div className="container-fluid">
@@ -285,6 +285,11 @@ export default function App() {
           </div>
         </>
       )}
+
+      {/* Version footer */}
+      <div className="text-center text-muted py-3 mt-auto" style={{ fontSize: '0.75rem' }}>
+        v{__APP_VERSION__} &middot; {__BUILD_DATE__}
+      </div>
     </div>
   );
 }
