@@ -1,7 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
+import { db } from './firebase';
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  where,
+  getDocs,
+  Timestamp,
+} from 'firebase/firestore';
 
-function formatTimeSince(isoString) {
-  const date = new Date(isoString);
+const activitiesRef = collection(db, 'activities');
+
+function formatTimeSince(isoDate) {
+  const date = isoDate instanceof Timestamp ? isoDate.toDate() : new Date(isoDate);
   const now = new Date();
   const diffMs = now - date;
   const diffMinutes = Math.floor(diffMs / (1000 * 60));
@@ -46,12 +62,17 @@ export default function App() {
   const [, forceUpdate] = useState(0);
   const inputRef = useRef(null);
 
-  // Load activities on mount
+  // Subscribe to Firestore activities in real time
   useEffect(() => {
-    fetch('/api/activities')
-      .then(r => r.json())
-      .then(data => { setActivities(data); setLoading(false); })
-      .catch(() => setLoading(false));
+    const q = query(activitiesRef, orderBy('lastTime', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setActivities(snapshot.docs.map(d => ({ _id: d.id, ...d.data() })));
+      setLoading(false);
+    }, (err) => {
+      console.error('Firestore listener error:', err);
+      setLoading(false);
+    });
+    return unsubscribe;
   }, []);
 
   // Refresh time labels every minute
@@ -71,30 +92,35 @@ export default function App() {
   const handleSave = async () => {
     const name = activityName.trim();
     if (!name) return;
-    const res = await fetch('/api/activities', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
-    const doc = await res.json();
-    setActivities(prev => {
-      const exists = prev.find(a => a._id === doc._id);
-      if (exists) return prev.map(a => a._id === doc._id ? doc : a);
-      return [doc, ...prev];
-    });
+
+    // Check if activity with same name already exists (case-insensitive)
+    const q = query(activitiesRef, where('nameLower', '==', name.toLowerCase()));
+    const existing = await getDocs(q);
+
+    if (!existing.empty) {
+      const existingDoc = existing.docs[0];
+      await updateDoc(doc(db, 'activities', existingDoc.id), {
+        lastTime: Timestamp.now(),
+      });
+    } else {
+      await addDoc(activitiesRef, {
+        name,
+        nameLower: name.toLowerCase(),
+        lastTime: Timestamp.now(),
+      });
+    }
     closeDialog();
   };
 
   const handleMarkDone = async (id) => {
-    const res = await fetch(`/api/activities/${id}`, { method: 'PATCH' });
-    const doc = await res.json();
-    setActivities(prev => prev.map(a => a._id === doc._id ? doc : a));
+    await updateDoc(doc(db, 'activities', id), {
+      lastTime: Timestamp.now(),
+    });
     setConfirmId(null);
   };
 
   const handleDelete = async (id) => {
-    await fetch(`/api/activities/${id}`, { method: 'DELETE' });
-    setActivities(prev => prev.filter(a => a._id !== id));
+    await deleteDoc(doc(db, 'activities', id));
     setDeleteId(null);
   };
 
