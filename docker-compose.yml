@@ -1,7 +1,21 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DATA_FILE=/data/activities.json
+    volumes:
+      - app-data:/data
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
     ports:
-      - "3001:3001"
-    env_file:
-      - .env
+      - "3030:80"
+    depends_on:
+      - app
+
+volumes:
+  app-data:
