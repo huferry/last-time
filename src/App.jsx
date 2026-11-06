@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { db } from './firebase';
+import { db, auth, signInWithGoogle, signOutUser } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import {
   collection,
   query,
@@ -53,6 +54,8 @@ function formatTimeSince(isoDate) {
 
 
 export default function App() {
+  const [user, setUser] = useState(undefined); // undefined = loading, null = not signed in
+  const [authError, setAuthError] = useState('');
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
@@ -62,8 +65,27 @@ export default function App() {
   const [, forceUpdate] = useState(0);
   const inputRef = useRef(null);
 
-  // Subscribe to Firestore activities in real time
+  // Listen to auth state
   useEffect(() => {
+    return onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      if (!u) setLoading(false);
+    });
+  }, []);
+
+  const handleSignIn = async () => {
+    setAuthError('');
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setAuthError(err.message);
+    }
+  };
+
+  // Subscribe to Firestore activities in real time (only when signed in)
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
     const q = query(activitiesRef, orderBy('lastTime', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setActivities(snapshot.docs.map(d => ({ _id: d.id, ...d.data() })));
@@ -73,7 +95,7 @@ export default function App() {
       setLoading(false);
     });
     return unsubscribe;
-  }, []);
+  }, [user]);
 
   // Refresh time labels every minute
   useEffect(() => {
@@ -124,6 +146,32 @@ export default function App() {
     setDeleteId(null);
   };
 
+  // Auth loading
+  if (user === undefined) {
+    return (
+      <div className="min-vh-100 d-flex align-items-center justify-content-center">
+        <div className="spinner-border text-primary" role="status" />
+      </div>
+    );
+  }
+
+  // Not signed in
+  if (!user) {
+    return (
+      <div className="min-vh-100 d-flex flex-column align-items-center justify-content-center bg-light">
+        <i className="bi bi-clock-history text-primary" style={{ fontSize: '4rem' }}></i>
+        <h1 className="fw-bold mt-3 mb-4">Last Time</h1>
+        <button className="btn btn-dark btn-lg d-flex align-items-center gap-2 px-4" onClick={handleSignIn}>
+          <i className="bi bi-google"></i> Sign in with Google
+        </button>
+        {authError && <div className="alert alert-danger mt-3 mx-3">{authError}</div>}
+        <div className="text-muted mt-4" style={{ fontSize: '0.75rem' }}>
+          v{__APP_VERSION__} &middot; {__BUILD_DATE__}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-vh-100 d-flex flex-column">
       {/* Header */}
@@ -132,6 +180,9 @@ export default function App() {
           <span className="navbar-brand fw-bold fs-5">
             <i className="bi bi-clock-history me-2"></i>Last Time
           </span>
+          <button className="btn btn-sm btn-outline-light" onClick={signOutUser}>
+            <i className="bi bi-box-arrow-right"></i>
+          </button>
         </div>
       </nav>
 
